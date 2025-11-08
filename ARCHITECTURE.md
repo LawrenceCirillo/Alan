@@ -142,6 +142,25 @@ They're frameworks that use OpenAI's API.
 
 ## Future Enhancements
 
+### Arcade.dev Integration
+
+Alan will integrate **Arcade.dev** as the tool-calling abstraction layer:
+
+- **Purpose**: Pre-built connectors for 100+ SaaS tools (Gmail, Airtable, Slack, etc.)
+- **Auth Handling**: Automatic OAuth flows - no API key management needed
+- **Agent-Native**: Built specifically for CrewAI/LangChain tool-calling
+- **MCP-Based**: Uses Model Context Protocol for standardized tool interactions
+
+**Benefits**:
+- No need to build individual integrations
+- Seamless OAuth flows for users
+- Battle-tested connectors
+- Perfect fit for "Cursor for Business" automation model
+
+See `ARCADE_INTEGRATION.md` for detailed integration plan.
+
+### Workflow Execution
+
 Currently, there's a TODO to better parse CrewAI results:
 
 ```python
