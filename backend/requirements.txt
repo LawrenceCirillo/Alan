@@ -17,3 +17,7 @@ python-multipart>=0.0.6
 # HTTP Client
 httpx>=0.25.1
 
+# Arcade.dev Integration (AI Tool-Calling Platform)
+# Note: Install when ready to integrate Arcade.dev
+# arcade-sdk>=1.0.0  # Uncomment when Arcade.dev SDK is available
+
