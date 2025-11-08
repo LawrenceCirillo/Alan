@@ -223,5 +223,25 @@ A feature fails if:
 
 ---
 
-**Remember: We are building for Managers, not Builders. The AI is the Process Engineer. The user is the Decision Maker.**
+## Key Distinctions
+
+### Required vs. Optional
+- **Required**: Users must do this to use the product
+- **Optional**: Users can do this if they want more control
+
+### Primary vs. Secondary
+- **Primary Path**: Goal → Gather → Approve (no editing required)
+- **Secondary Path**: Goal → Gather → Edit (optional) → Approve (for power users)
+
+### The Golden Rule
+**Users should NEVER HAVE TO edit workflows. But if they WANT TO, they CAN.**
+
+This ensures we serve:
+- **Non-technical users**: Never have to edit, just approve
+- **Power users**: Can customize if they enjoy it
+- **Everyone**: Gets value from the product
+
+---
+
+**Remember: We are building for Managers, not Builders. The AI is the Process Engineer. The user is the Decision Maker. Editing is optional, approval is required.**
 
