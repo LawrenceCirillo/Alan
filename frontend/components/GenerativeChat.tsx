@@ -10,7 +10,6 @@ import { Message, MessageContent } from '@/components/ai/message'
 import { Response } from '@/components/ai/response'
 import { Conversation, ConversationContent } from '@/components/ai/conversation'
 import { PromptInput } from '@/components/ai/prompt-input'
-import { Reasoning, ReasoningStep } from '@/components/ai/reasoning'
 import { Tool } from '@/components/ai/tool'
 
 interface GenerativeChatProps {
@@ -55,7 +54,6 @@ export default function GenerativeChat({
   const chatStarted = parentChatStarted || isChatStarted
   const [error, setError] = useState<string | null>(null)
   const [submittedToolResults, setSubmittedToolResults] = useState<Record<string, string>>({})
-  const [aiThinkingSteps, setAiThinkingSteps] = useState<string[]>([]) // For Cursor-like feedback
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Use provided chat - should always be provided from parent
@@ -70,9 +68,6 @@ export default function GenerativeChat({
     // The onReferenceNode callback is handled by the parent component
     // This effect is kept for potential future use
   }, [onReferenceNode])
-
-  // Track processed messages to avoid duplicate workflow generation
-  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set())
 
   // Function to submit tool results
   const submitToolResult = async ({ toolCallId, result }: { toolCallId: string; result: string }) => {
@@ -93,58 +88,6 @@ export default function GenerativeChat({
     }
   }
 
-  const generateWorkflow = async (goal: string) => {
-    try {
-      onGenerationStart()
-      
-      // Cursor-like thinking steps
-      const thinkingSteps = [
-        'Analyzing your goal...',
-        'Identifying required integrations...',
-        'Designing workflow steps...',
-        'Generating workflow blueprint...',
-      ]
-      
-      // Show thinking steps progressively
-      for (let i = 0; i < thinkingSteps.length; i++) {
-        setAiThinkingSteps(thinkingSteps.slice(0, i + 1))
-        await new Promise(resolve => setTimeout(resolve, 800))
-      }
-      
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/workflow/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          goal: goal.trim(),
-          context: {},
-        }),
-      })
-
-      if (!response.ok) {
-        let errorMessage = `Failed to generate workflow: ${response.statusText}`
-        try {
-          const errorData = await response.json()
-          if (errorData.detail) {
-            errorMessage = errorData.detail
-          }
-        } catch {
-          // If JSON parsing fails, use the status text
-        }
-        throw new Error(errorMessage)
-      }
-
-      const blueprint: WorkflowBlueprintData = await response.json()
-      setAiThinkingSteps([]) // Clear thinking steps
-      onBlueprintGenerated(blueprint)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate workflow'
-      setError(errorMessage)
-      setAiThinkingSteps([]) // Clear thinking steps on error
-      console.error('Workflow generation error:', err)
-    }
-  }
-
   const handleSuggestionClick = (suggestion: string) => {
     // Populate the input field with the suggestion
     // User can edit or send as-is
@@ -155,29 +98,21 @@ export default function GenerativeChat({
     }, 0)
   }
 
-  // Generate workflow when a new user message is added
+  // Watch for workflow blueprint tool calls and notify parent
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1]
-    if (
-      lastMessage &&
-      lastMessage.role === 'user' &&
-      !processedMessageIds.has(lastMessage.id)
-    ) {
-      // Ensure chat is started
-      if (!isChatStarted) {
-        setIsChatStarted(true)
-        onChatStart()
+    // Check all messages for blueprint tool calls
+    messages.forEach((message) => {
+      if (message.toolInvocations) {
+        message.toolInvocations.forEach((toolCall: any) => {
+          if (toolCall.toolName === 'renderWorkflowBlueprint' && toolCall.args) {
+            // Notify parent that a blueprint was generated
+            onBlueprintGenerated(toolCall.args)
+            onGenerationStart() // Mark generation as started
+          }
+        })
       }
-      // Mark as processed immediately
-      const newProcessedIds = new Set(processedMessageIds)
-      newProcessedIds.add(lastMessage.id)
-      setProcessedMessageIds(newProcessedIds)
-      
-      // Generate workflow
-      generateWorkflow(lastMessage.content)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages])
+    })
+  }, [messages, onBlueprintGenerated, onGenerationStart])
 
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -188,8 +123,7 @@ export default function GenerativeChat({
     onChatStart()
     setError(null)
 
-    // Use the useChat handleSubmit (this will add the message to the chat and call API)
-    // The useEffect will handle workflow generation when message is added
+    // Use the useChat handleSubmit - workflow generation now happens in the API route
     handleSubmit(e)
   }
 
@@ -384,6 +318,16 @@ export default function GenerativeChat({
                   )
                 }
                 
+                // Blueprint rendering is handled by the parent component
+                // We just mark it as complete here
+                if (toolCall.toolName === 'renderWorkflowBlueprint') {
+                  return (
+                    <Tool key={toolCall.toolCallId} name="Workflow Blueprint" status="complete">
+                      Workflow blueprint generated with {toolCall.args?.nodes?.length || 0} steps
+                    </Tool>
+                  )
+                }
+                
                 return (
                   <Tool key={toolCall.toolCallId} name={toolCall.toolName} status="pending">
                     {toolCall.args && JSON.stringify(toolCall.args)}
@@ -394,24 +338,11 @@ export default function GenerativeChat({
           </Message>
         )})}
         
-        {/* Cursor-like AI Thinking Bubbles - Stay in chat with lighter opacity */}
-        {aiThinkingSteps.length > 0 && (
+        {/* Loading indicator - Show while waiting for response */}
+        {isLoading && (
           <Message from="assistant">
             <MessageContent>
-              <Reasoning isStreaming={true} defaultOpen={true} className="opacity-60">
-                {aiThinkingSteps.map((step, index) => (
-                  <ReasoningStep key={index}>{step}</ReasoningStep>
-                ))}
-              </Reasoning>
-            </MessageContent>
-          </Message>
-        )}
-        
-        {/* Loading indicator - Stay in chat with lighter opacity */}
-        {isLoading && aiThinkingSteps.length === 0 && (
-          <Message from="assistant">
-            <MessageContent>
-              <Tool name="Generating workflow..." status="pending" className="opacity-50" />
+              <Tool name="Thinking..." status="pending" className="opacity-50" />
             </MessageContent>
           </Message>
         )}
